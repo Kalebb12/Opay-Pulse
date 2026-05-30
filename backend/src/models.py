@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, create_engine
+from sqlalchemy import Column, Integer, String, DateTime, create_engine, Numeric
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
@@ -22,21 +22,22 @@ class Trader(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     phone_number = Column(String(20), unique=True, nullable=False, index=True)
-    name = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=datetime.now)
-    last_message_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    last_log_date = Column(DateTime, nullable=True)
     streak_count = Column(Integer, default=0)
+    credit_score = Column(Integer, nullable=True)
 
-class Message(Base):
-    __tablename__ = "messages"
+class Transaction(Base):
+    __tablename__ = "transactions"
     
     id = Column(Integer, primary_key=True, index=True)
     trader_id = Column(Integer, nullable=False, index=True)
-    body = Column(String(500))
-    direction = Column(String(10))  # 'inbound' or 'outbound'
-    created_at = Column(DateTime, default=datetime.now)
+    type = Column(String(10))  # 'income' or 'expense'
+    amount = Column(Numeric(12, 2))
+    category = Column(String(50))  # 'sales', 'stock', 'transport', etc
+    description = Column(String(200), nullable=True)
+    logged_at = Column(DateTime, default=datetime.now, index=True)
 
-# Create tables
 Base.metadata.create_all(bind=engine)
 
 def get_db():
