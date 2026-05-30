@@ -14,7 +14,7 @@ The OPay Pulse Dashboard API provides comprehensive endpoints for displaying cha
 ```json
 {
   "data": {...},
-  "total": 100,
+  "total": 10income0,
   ...
 }
 ```
