@@ -1,21 +1,19 @@
-from fastapi import FastAPI, Request, Depends, Query
+from fastapi import FastAPI, Request, Depends, Query, HTTPException
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from twilio.rest import Client
 import os
 from dotenv import load_dotenv
-from datetime import date
+from datetime import datetime, timedelta
 from src.csv_handler import handle_csv_upload
-from src.models import get_db
+from src.models import get_db, Trader, Transaction
 from src.helpers import TraderService
-from src.analytics import AnalyticsService
 from src.schemas import (
-    MetricsSummary, TransactionAnalytics, TransactionTrendResponse,
-    CategoryDistributionResponse, UserGrowthResponse, TopTradersResponse,
-    CreditScoreDistributionResponse, IncomeVsExpenseResponse,
-    TransactionsResponse, TraderPerformance, PeriodComparisonResponse
+    TraderProfileResponse, TraderTransactionsResponse, TraderStatsResponse,
+    TraderRankingResponse, TransactionData, ErrorResponse
 )
 from sqlalchemy.orm import Session 
+from sqlalchemy import desc, func
 from src.agent import run_agent
 
 load_dotenv()
@@ -80,128 +78,161 @@ def send_whatsapp_message(to_number: str, message_body: str):
 
 
 # ============================================================
-# Dashboard API Endpoints
+# Trader Dashboard API Endpoints
 # ============================================================
 
-@app.get("/api/metrics/summary", response_model=MetricsSummary)
-async def get_metrics_summary(db: Session = Depends(get_db)):
-    """Get overall KPI metrics"""
-    return AnalyticsService.get_metrics_summary(db)
+@app.get("/api/dashboard/trader/{trader_id}", response_model=TraderProfileResponse)
+async def get_trader_profile(trader_id: int, db: Session = Depends(get_db)):
+    """Get trader profile information"""
+    trader = db.query(Trader).filter(Trader.id == trader_id).first()
+    if not trader:
+        raise HTTPException(status_code=404, detail="Trader not found")
+    
+    return {
+        "trader_id": trader.id,
+        "phone_number": trader.phone_number,
+        "credit_score": trader.credit_score or 0,
+        "streak_count": trader.streak_count,
+        "joined_date": trader.created_at.isoformat(),
+        "last_active": trader.last_log_date.isoformat() if trader.last_log_date else None
+    }
 
 
-@app.get("/api/metrics/transactions", response_model=TransactionAnalytics)
-async def get_transaction_metrics(
-    period: str = Query("30d", description="Period: 7d, 30d, 90d, 1y"),
-    category: str = Query("all", description="Category filter"),
+@app.get("/api/dashboard/trader/{trader_id}/transactions", response_model=TraderTransactionsResponse)
+async def get_trader_transactions(
+    trader_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    tx_type: str = Query(None, description="Filter by type: income, expense"),
     db: Session = Depends(get_db)
 ):
-    """Get transaction analytics for a period"""
-    return AnalyticsService.get_transaction_analytics(db, period, category if category != "all" else None)
+    """Get trader's transactions"""
+    trader = db.query(Trader).filter(Trader.id == trader_id).first()
+    if not trader:
+        raise HTTPException(status_code=404, detail="Trader not found")
+    
+    query = db.query(Transaction).filter(Transaction.trader_id == trader_id)
+    
+    if tx_type and tx_type in ["income", "expense"]:
+        query = query.filter(Transaction.type == tx_type)
+    
+    total = query.count()
+    transactions = query.order_by(desc(Transaction.logged_at)).offset(offset).limit(limit).all()
+    
+    return {
+        "trader_id": trader_id,
+        "data": [
+            {
+                "id": tx.id,
+                "type": tx.type,
+                "amount": float(tx.amount),
+                "category": tx.category,
+                "description": tx.description,
+                "logged_at": tx.logged_at.isoformat()
+            }
+            for tx in transactions
+        ],
+        "total": total,
+        "limit": limit,
+        "offset": offset
+    }
 
 
-@app.get("/api/analytics/transaction-trend", response_model=TransactionTrendResponse)
-async def get_transaction_trend(
-    period: str = Query("7d", description="Period: 7d, 30d, 90d, 1y"),
-    group_by: str = Query("daily", description="Group by: daily, weekly, monthly"),
-    db: Session = Depends(get_db)
-):
-    """Get transaction trends over time"""
-    return AnalyticsService.get_transaction_trend(db, period, group_by)
-
-
-@app.get("/api/analytics/category-distribution", response_model=CategoryDistributionResponse)
-async def get_category_distribution(
-    period: str = Query("30d", description="Period: 7d, 30d, 90d, 1y"),
-    db: Session = Depends(get_db)
-):
-    """Get category distribution for income"""
-    return AnalyticsService.get_category_distribution(db, period)
-
-
-@app.get("/api/metrics/user-growth", response_model=UserGrowthResponse)
-async def get_user_growth(
-    period: str = Query("30d", description="Period: 7d, 30d, 90d, 1y"),
-    group_by: str = Query("daily", description="Group by: daily, weekly"),
-    db: Session = Depends(get_db)
-):
-    """Get user growth metrics"""
-    return AnalyticsService.get_user_growth(db, period)
-
-
-@app.get("/api/traders/top", response_model=TopTradersResponse)
-async def get_top_traders(
-    limit: int = Query(10, ge=1, le=100, description="Number of traders to return"),
-    sort_by: str = Query("volume", description="Sort by: volume, score, streak"),
-    period: str = Query("30d", description="Period: 7d, 30d, 90d, 1y"),
-    db: Session = Depends(get_db)
-):
-    """Get top traders by various metrics"""
-    return AnalyticsService.get_top_traders(db, limit, sort_by, period)
-
-
-@app.get("/api/analytics/credit-score-distribution", response_model=CreditScoreDistributionResponse)
-async def get_credit_score_distribution(db: Session = Depends(get_db)):
-    """Get credit score distribution"""
-    return AnalyticsService.get_credit_score_distribution(db)
-
-
-@app.get("/api/analytics/income-vs-expense", response_model=IncomeVsExpenseResponse)
-async def get_income_vs_expense(
-    period: str = Query("7d", description="Period: 7d, 30d, 90d, 1y"),
-    db: Session = Depends(get_db)
-):
-    """Get income vs expense comparison"""
-    return AnalyticsService.get_income_vs_expense(db, period)
-
-
-@app.get("/api/transactions/recent", response_model=TransactionsResponse)
-async def get_recent_transactions(
-    limit: int = Query(20, ge=1, le=100, description="Number of transactions to return"),
-    offset: int = Query(0, ge=0, description="Pagination offset"),
-    sort_by: str = Query("date", description="Sort by: date, amount"),
-    order: str = Query("desc", description="Order: asc, desc"),
-    db: Session = Depends(get_db)
-):
-    """Get recent transactions with pagination"""
-    return AnalyticsService.get_recent_transactions(db, limit, offset, sort_by, order)
-
-
-@app.get("/api/traders/{trader_id}/performance", response_model=TraderPerformance)
-async def get_trader_performance(
+@app.get("/api/dashboard/trader/{trader_id}/stats", response_model=TraderStatsResponse)
+async def get_trader_stats(
     trader_id: int,
     period: str = Query("30d", description="Period: 7d, 30d, 90d, 1y"),
     db: Session = Depends(get_db)
 ):
-    """Get individual trader performance metrics"""
-    performance = AnalyticsService.get_trader_performance(db, trader_id, period)
-    if not performance:
-        return {"detail": "Trader not found"}, 404
-    return performance
+    """Get trader's statistics for a period"""
+    trader = db.query(Trader).filter(Trader.id == trader_id).first()
+    if not trader:
+        raise HTTPException(status_code=404, detail="Trader not found")
+    
+    # Parse period
+    today = datetime.now().date()
+    if period == "7d":
+        start = today - timedelta(days=7)
+    elif period == "30d":
+        start = today - timedelta(days=30)
+    elif period == "90d":
+        start = today - timedelta(days=90)
+    elif period == "1y":
+        start = today - timedelta(days=365)
+    else:
+        start = today - timedelta(days=30)
+    
+    # Query transactions within period
+    transactions = db.query(Transaction).filter(
+        Transaction.trader_id == trader_id,
+        Transaction.logged_at >= datetime.combine(start, datetime.min.time())
+    ).all()
+    
+    income_txs = [tx for tx in transactions if tx.type == "income"]
+    expense_txs = [tx for tx in transactions if tx.type == "expense"]
+    
+    total_income = sum(float(tx.amount) for tx in income_txs)
+    total_expense = sum(float(tx.amount) for tx in expense_txs)
+    
+    return {
+        "trader_id": trader_id,
+        "period": period,
+        "total_transactions": len(transactions),
+        "income_transactions": len(income_txs),
+        "expense_transactions": len(expense_txs),
+        "total_income": total_income,
+        "total_expense": total_expense,
+        "net_balance": total_income - total_expense,
+        "average_transaction": (total_income + total_expense) / len(transactions) if transactions else 0
+    }
 
 
-@app.get("/api/analytics/period-comparison", response_model=PeriodComparisonResponse)
-async def get_period_comparison(
-    current_period: str = Query("7d", description="Current period: 7d, 30d, 90d, 1y"),
+@app.get("/api/dashboard/traders/ranking", response_model=TraderRankingResponse)
+async def get_traders_ranking(
+    limit: int = Query(10, ge=1, le=100),
+    sort_by: str = Query("volume", description="Sort by: volume, credit_score, transactions"),
     db: Session = Depends(get_db)
 ):
-    """Compare current period with previous period"""
-    return AnalyticsService.get_period_comparison(db, current_period)
-
-
-@app.get("/api/transactions/search", response_model=TransactionsResponse)
-async def search_transactions(
-    tx_type: str = Query(None, description="Filter by type: income, expense"),
-    category: str = Query(None, description="Filter by category"),
-    min_amount: float = Query(None, description="Minimum amount"),
-    max_amount: float = Query(None, description="Maximum amount"),
-    start_date: date = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: date = Query(None, description="End date (YYYY-MM-DD)"),
-    trader_id: int = Query(None, description="Filter by trader ID"),
-    limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
-):
-    """Search and filter transactions"""
-    return AnalyticsService.search_transactions(
-        db, tx_type, category, min_amount, max_amount, start_date, end_date, trader_id, limit, offset
-    )
+    """Get top traders ranking"""
+    traders = db.query(Trader).all()
+    
+    # Calculate stats for each trader
+    traders_with_stats = []
+    for trader in traders:
+        tx_count = db.query(func.count(Transaction.id)).filter(
+            Transaction.trader_id == trader.id
+        ).scalar() or 0
+        
+        total_volume = db.query(func.sum(Transaction.amount)).filter(
+            Transaction.trader_id == trader.id
+        ).scalar() or 0
+        
+        traders_with_stats.append({
+            "trader_id": trader.id,
+            "phone_number": trader.phone_number,
+            "credit_score": trader.credit_score or 0,
+            "total_volume": float(total_volume),
+            "transaction_count": tx_count,
+            "streak_count": trader.streak_count
+        })
+    
+    # Sort based on parameter
+    if sort_by == "volume":
+        traders_with_stats.sort(key=lambda x: x["total_volume"], reverse=True)
+    elif sort_by == "credit_score":
+        traders_with_stats.sort(key=lambda x: x["credit_score"], reverse=True)
+    else:  # transactions
+        traders_with_stats.sort(key=lambda x: x["transaction_count"], reverse=True)
+    
+    # Add rank
+    ranked = [
+        {**trader, "rank": idx + 1}
+        for idx, trader in enumerate(traders_with_stats[:limit])
+    ]
+    
+    return {
+        "data": ranked,
+        "sort_by": sort_by,
+        "total_traders": len(traders),
+        "returned": len(ranked)
+    }

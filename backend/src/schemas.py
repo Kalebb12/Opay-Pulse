@@ -1,146 +1,28 @@
 from pydantic import BaseModel
-from typing import List, Dict, Optional
-from datetime import datetime
+from typing import List, Optional
 
 
 # ============================================================
-# Metric Cards & Summary
+# Trader Profile
 # ============================================================
 
-class MetricsSummary(BaseModel):
-    """Overall KPI metrics"""
-    total_traders: int
-    active_traders_today: int
-    total_transactions: int
-    total_volume: float
-    average_transaction: float
-    average_credit_score: int
-
-
-# ============================================================
-# Transaction Analytics
-# ============================================================
-
-class TransactionAnalytics(BaseModel):
-    """Transaction analytics for a period"""
-    total: int
-    income: float
-    expense: float
-    net: float
-    success_rate: float
-    categories: Dict[str, float]
-
-
-# ============================================================
-# Transaction Trend
-# ============================================================
-
-class DailyTransaction(BaseModel):
-    """Daily transaction data"""
-    date: str
-    income: float
-    expense: float
-    net: float
-
-
-class TransactionTrendResponse(BaseModel):
-    """Transaction trend data"""
-    data: List[DailyTransaction]
-
-
-# ============================================================
-# Category Distribution
-# ============================================================
-
-class CategoryData(BaseModel):
-    """Category distribution data"""
-    name: str
-    value: float
-    percentage: float
-
-
-class CategoryDistributionResponse(BaseModel):
-    """Category distribution response"""
-    data: List[CategoryData]
-
-
-# ============================================================
-# User Growth
-# ============================================================
-
-class DailyGrowth(BaseModel):
-    """Daily user growth data"""
-    date: str
-    new_traders: int
-    active_traders: int
-    cumulative: int
-
-
-class UserGrowthResponse(BaseModel):
-    """User growth response"""
-    data: List[DailyGrowth]
-
-
-# ============================================================
-# Top Traders
-# ============================================================
-
-class TopTrader(BaseModel):
-    """Top trader data"""
-    rank: int
+class TraderProfileResponse(BaseModel):
+    """Trader profile information"""
     trader_id: int
     phone_number: str
-    total_volume: float
-    transaction_count: int
     credit_score: int
     streak_count: int
-
-
-class TopTradersResponse(BaseModel):
-    """Top traders response"""
-    data: List[TopTrader]
+    joined_date: str
+    last_active: Optional[str]
 
 
 # ============================================================
-# Credit Score Distribution
-# ============================================================
-
-class CreditScoreBucket(BaseModel):
-    """Credit score distribution bucket"""
-    range: str
-    count: int
-
-
-class CreditScoreDistributionResponse(BaseModel):
-    """Credit score distribution response"""
-    data: List[CreditScoreBucket]
-
-
-# ============================================================
-# Income vs Expense
-# ============================================================
-
-class IncomeExpenseData(BaseModel):
-    """Daily income vs expense data"""
-    date: str
-    income: float
-    expense: float
-
-
-class IncomeVsExpenseResponse(BaseModel):
-    """Income vs expense response"""
-    data: List[IncomeExpenseData]
-
-
-# ============================================================
-# Transactions
+# Transaction Data
 # ============================================================
 
 class TransactionData(BaseModel):
     """Transaction data"""
     id: int
-    trader_id: int
-    trader_phone: str
     type: str
     amount: float
     category: str
@@ -148,8 +30,9 @@ class TransactionData(BaseModel):
     logged_at: str
 
 
-class TransactionsResponse(BaseModel):
-    """Transactions response with pagination"""
+class TraderTransactionsResponse(BaseModel):
+    """Trader transactions response with pagination"""
+    trader_id: int
     data: List[TransactionData]
     total: int
     limit: int
@@ -157,48 +40,43 @@ class TransactionsResponse(BaseModel):
 
 
 # ============================================================
-# Trader Performance
+# Trader Statistics
 # ============================================================
 
-class TraderPerformance(BaseModel):
-    """Trader performance metrics"""
+class TraderStatsResponse(BaseModel):
+    """Trader statistics for a period"""
     trader_id: int
-    phone_number: str
+    period: str
     total_transactions: int
-    total_volume: float
-    average_transaction: float
     income_transactions: int
     expense_transactions: int
-    income_total: float
-    expense_total: float
+    total_income: float
+    total_expense: float
+    net_balance: float
+    average_transaction: float
+
+
+# ============================================================
+# Trader Ranking
+# ============================================================
+
+class RankedTrader(BaseModel):
+    """Ranked trader data"""
+    rank: int
+    trader_id: int
+    phone_number: str
     credit_score: int
+    total_volume: float
+    transaction_count: int
     streak_count: int
-    joined_date: str
 
 
-# ============================================================
-# Period Comparison
-# ============================================================
-
-class PeriodStats(BaseModel):
-    """Statistics for a period"""
-    transactions: int
-    volume: float
-    average_transaction: float
-
-
-class PeriodChange(BaseModel):
-    """Change percentages"""
-    transactions: float
-    volume: float
-    average_transaction: float
-
-
-class PeriodComparisonResponse(BaseModel):
-    """Period comparison response"""
-    current_period: PeriodStats
-    previous_period: PeriodStats
-    change: PeriodChange
+class TraderRankingResponse(BaseModel):
+    """Traders ranking response"""
+    data: List[RankedTrader]
+    sort_by: str
+    total_traders: int
+    returned: int
 
 
 # ============================================================
@@ -209,3 +87,4 @@ class ErrorResponse(BaseModel):
     """Error response"""
     detail: str
     status_code: int
+
