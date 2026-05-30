@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from src.models import Trader, Transaction
+from src.models import CreditSale, Trader, Transaction, DashboardToken
 from datetime import date, datetime, timedelta
-
+import secrets
 
 class TraderService:
 
@@ -258,3 +258,264 @@ class TraderService:
             ]
 
         return []
+    
+    @staticmethod
+    def generate_dashboard_token(db: Session, trader_id: int) -> str:
+        # Invalidate any existing unused tokens for this trader
+        db.query(DashboardToken).filter(
+            DashboardToken.trader_id == trader_id,
+            DashboardToken.used == False
+        ).delete()
+        db.commit()
+
+        # Generate new token
+        token = secrets.token_urlsafe(32)
+        expires_at = datetime.now() + timedelta(minutes=10)
+
+        db_token = DashboardToken(
+            trader_id=trader_id,
+            token=token,
+            expires_at=expires_at
+        )
+        db.add(db_token)
+        db.commit()
+
+        return token
+
+    @staticmethod
+    def get_daily_chart_data(db: Session, trader_id: int, days: int = 30) -> list:
+        """
+        Returns last N days of daily income/expense/profit.
+        Used by the dashboard chart.
+        """
+        daily_data = []
+
+        for i in range(days - 1, -1, -1):
+            day = date.today() - timedelta(days=i)
+
+            income = db.query(func.sum(Transaction.amount)).filter(
+                Transaction.trader_id == trader_id,
+                Transaction.type == "income",
+                func.date(Transaction.logged_at) == day
+            ).scalar() or 0
+
+            expense = db.query(func.sum(Transaction.amount)).filter(
+                Transaction.trader_id == trader_id,
+                Transaction.type == "expense",
+                func.date(Transaction.logged_at) == day
+            ).scalar() or 0
+
+            daily_data.append({
+                "date": day.strftime("%d %b"),
+                "income": float(income),
+                "expense": float(expense),
+                "profit": float(income - expense)
+            })
+
+        return daily_data
+    
+    
+    @staticmethod
+    def validate_dashboard_token(db: Session, token: str):
+        """
+        Returns trader if token is valid, None if invalid or expired.
+        """
+        db_token = db.query(DashboardToken).filter(
+            DashboardToken.token == token,
+            DashboardToken.used == False
+        ).first()
+
+        if not db_token:
+            return None
+
+        # Check expiry
+        if datetime.now() > db_token.expires_at:
+            db.delete(db_token)
+            db.commit()
+            return None
+
+        # Mark token as used
+        # db_token.used = True
+        # db.commit()
+
+        # Return the trader
+        trader = db.query(Trader).filter(
+            Trader.id == db_token.trader_id
+        ).first()
+
+        return trader
+
+    
+
+    @staticmethod
+    def get_trader_dashboard_data(db: Session, trader_id: int) -> dict:
+        """All data needed for the dashboard"""
+        trader = db.query(Trader).filter(Trader.id == trader_id).first()
+
+        week = TraderService.get_week_summary(db, trader_id)
+        month = TraderService.get_month_summary(db, trader_id)
+        today = TraderService.get_today_total(db, trader_id)
+
+        # Last 30 days of daily totals for chart
+        daily_data = []
+        for i in range(29, -1, -1):
+            day = date.today() - timedelta(days=i)
+
+            income = db.query(func.sum(Transaction.amount)).filter(
+                Transaction.trader_id == trader_id,
+                Transaction.type == "income",
+                func.date(Transaction.logged_at) == day
+            ).scalar() or 0
+
+            expense = db.query(func.sum(Transaction.amount)).filter(
+                Transaction.trader_id == trader_id,
+                Transaction.type == "expense",
+                func.date(Transaction.logged_at) == day
+            ).scalar() or 0
+
+            daily_data.append({
+                "date": day.strftime("%d %b"),
+                "income": float(income),
+                "expense": float(expense),
+                "profit": float(income - expense)
+            })
+
+        return {
+            "trader": {
+                "phone": trader.phone_number,
+                "streak": trader.streak_count,
+                "credit_score": trader.credit_score,
+                "member_since": trader.created_at.strftime("%B %Y")
+            },
+            "today": today,
+            "week": week,
+            "month": month,
+            "chart_data": daily_data
+        }
+
+    @staticmethod
+    def log_credit_sale(
+        db: Session,
+        trader_id: int,
+        customer_name: str,
+        amount: float,
+        due_date_str: str = "",
+        notes: str = ""
+    ):
+        # Parse due date if provided
+        due_date = None
+        if due_date_str:
+            try:
+                from dateutil import parser as date_parser
+                due_date = date_parser.parse(due_date_str, fuzzy=True)
+            except:
+                pass  # No due date if unparseable
+
+        # Check if customer already has an outstanding balance
+        existing = db.query(CreditSale).filter(
+            CreditSale.trader_id == trader_id,
+            CreditSale.customer_name.ilike(customer_name),
+            CreditSale.status.in_(["outstanding", "partially_paid"])
+        ).first()
+
+        if existing:
+            # Add to existing debt
+            existing.amount_owed = float(existing.amount_owed) + amount
+            existing.updated_at = datetime.now()
+            if due_date:
+                existing.due_date = due_date
+            db.commit()
+            return existing
+        else:
+            credit = CreditSale(
+                trader_id=trader_id,
+                customer_name=customer_name.strip().title(),
+                amount_owed=amount,
+                amount_paid=0,
+                due_date=due_date,
+                notes=notes,
+                status="outstanding"
+            )
+            db.add(credit)
+            db.commit()
+            db.refresh(credit)
+            return credit
+
+
+    @staticmethod
+    def log_credit_payment(
+        db: Session,
+        trader_id: int,
+        customer_name: str,
+        amount_paid: float
+    ):
+        # Find their most recent outstanding debt
+        credit = db.query(CreditSale).filter(
+            CreditSale.trader_id == trader_id,
+            CreditSale.customer_name.ilike(f"%{customer_name}%"),
+            CreditSale.status.in_(["outstanding", "partially_paid"])
+        ).order_by(CreditSale.created_at.desc()).first()
+
+        if not credit:
+            return {"found": False, "customer": customer_name}
+
+        credit.amount_paid = float(credit.amount_paid) + amount_paid
+        credit.updated_at = datetime.now()
+
+        balance = float(credit.amount_owed) - float(credit.amount_paid)
+
+        if balance <= 0:
+            credit.status = "paid"
+        else:
+            credit.status = "partially_paid"
+
+        db.commit()
+
+        return {
+            "found": True,
+            "customer": credit.customer_name,
+            "amount_paid": amount_paid,
+            "balance_remaining": max(balance, 0),
+            "fully_paid": credit.status == "paid"
+        }
+
+
+    @staticmethod
+    def get_debtors(db: Session, trader_id: int, filter: str = "all") -> dict:
+        query = db.query(CreditSale).filter(
+            CreditSale.trader_id == trader_id,
+            CreditSale.status.in_(["outstanding", "partially_paid"])
+        )
+
+        if filter == "overdue":
+            query = query.filter(
+                CreditSale.due_date < datetime.now(),
+                CreditSale.due_date.isnot(None)
+            )
+        elif filter == "recent":
+            week_ago = datetime.now() - timedelta(days=7)
+            query = query.filter(CreditSale.created_at >= week_ago)
+
+        debtors = query.order_by(CreditSale.amount_owed.desc()).all()
+
+        total_owed = sum(
+            float(d.amount_owed) - float(d.amount_paid)
+            for d in debtors
+        )
+
+        return {
+            "debtors": [
+                {
+                    "name": d.customer_name,
+                    "owed": float(d.amount_owed),
+                    "paid": float(d.amount_paid),
+                    "balance": float(d.amount_owed) - float(d.amount_paid),
+                    "status": d.status,
+                    "due_date": d.due_date.strftime("%d %b") if d.due_date else None,
+                    "overdue": d.due_date and d.due_date < datetime.now()
+                }
+                for d in debtors
+            ],
+            "total_outstanding": total_owed,
+            "total_debtors": len(debtors)
+        }
