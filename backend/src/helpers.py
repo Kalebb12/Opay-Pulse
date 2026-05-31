@@ -12,8 +12,11 @@ class TraderService:
 
     @staticmethod
     def get_or_create_trader(db: Session, phone_number: str):
-        clean_phone = phone_number.replace("whatsapp:", "")
+        clean_phone = phone_number.replace("whatsapp:", "").strip()
 
+        if clean_phone.startswith(" "):
+            clean_phone =  "+" + clean_phone.strip()
+            
         trader = db.query(Trader).filter(
             Trader.phone_number == clean_phone
         ).first()
@@ -209,27 +212,42 @@ class TraderService:
 
     @staticmethod
     def calculate_credit_score(db: Session, trader_id: int, opay_data: dict) -> int:
+        import math
+
         trader = db.query(Trader).filter(Trader.id == trader_id).first()
 
-        # Component 1: Streak consistency (max 200 pts)
-        streak_score = min((trader.streak_count / 30) * 200, 200)
+        def safe(val, default=0):
+            if val is None:
+                return default
+            try:
+                if math.isnan(val) or math.isinf(val):
+                    return default
+            except (TypeError, ValueError):
+                return default
+            return val
 
-        # Component 2: Income consistency from OPay data (max 250 pts)
-        std_dev = opay_data.get("income_std_dev", 0)
+        # Component 1: Streak (max 250)
+        streak_score = min((safe(trader.streak_count) / 30) * 250, 250)
+
+        # Component 2: Income consistency (max 250)
+        std_dev = safe(opay_data.get("income_std_dev"), 0)
         consistency_score = max(250 - std_dev * 2, 0)
 
-        # Component 3: Profit margin from trader logs (max 200 pts)
+        # Component 3: Profit margin from logs (max 200)
         month_data = TraderService.get_month_summary(db, trader_id)
-        margin = month_data.get("margin", 0)
+        margin = safe(month_data.get("margin"), 0)
         margin_score = min(margin * 4, 200)
 
-        # Component 4: Transaction volume from OPay data (max 200 pts)
-        monthly_avg = opay_data.get("monthly_avg_income", 0)
-        volume_score = min((monthly_avg / 500000) * 200, 200)
+        # Component 4: Transaction volume (max 300)
+        monthly_avg = safe(opay_data.get("monthly_avg_income"), 0)
+        volume_score = min((monthly_avg / 500000) * 300, 300)
 
         total = streak_score + consistency_score + margin_score + volume_score
-        score = int(300 + (total / 850 * 550))
 
+        if math.isnan(total) or math.isinf(total):
+            total = 0
+
+        score = int(300 + (total / 1000 * 550))
         return max(300, min(score, 850))
 
     @staticmethod

@@ -1,6 +1,6 @@
 import token
 
-from fastapi import FastAPI, Request, Depends, Query, HTTPException
+from fastapi import FastAPI, Request, Depends, Query, HTTPException, File, UploadFile
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from twilio.rest import Client
@@ -14,6 +14,7 @@ from src.schemas import TraderTransactionsResponse
 from sqlalchemy.orm import Session 
 from sqlalchemy import desc
 from src.agent import run_agent
+import shutil
 
 
 load_dotenv()
@@ -61,23 +62,43 @@ async def handle_whatsapp(request: Request, db: Session = Depends(get_db)):
     return Response(content=str(response), media_type="application/xml")
 
 
-# def send_whatsapp_message(to_number: str, message_body: str):
-#     """
-#     Send a WhatsApp message via Twilio
-#     """
-#     try:
-#         message = client.messages.create(
-#             from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
-#             body=message_body,
-#             to={to_number}
-#         )
-#         print(f"Message sent: {message.sid}")
-#         return message.sid
-#     except Exception as e:
-#         print(f"Error sending message: {str(e)}")
-#         return None
+@app.post("/test/csv-upload")
+async def test_csv_upload(
+    phone: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Test endpoint — bypasses WhatsApp and Twilio entirely.
+    POST a CSV file directly and see what the parser returns.
+    Remove this before going to production.
+    """
+    # Save uploaded file temporarily
+    temp_path = f"/tmp/test_{file.filename}"
+    with open(temp_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
 
+    # Get or create trader
+    trader = TraderService.get_or_create_trader(db, phone)
 
+    # Run the CSV logic directly
+    from src.csv_handler import parse_opay_statement, build_credit_reply
+    
+    opay_data = parse_opay_statement(temp_path)
+
+    if not opay_data["success"]:
+        return {"error": opay_data["error"]}
+
+    score = TraderService.calculate_credit_score(db, trader.id, opay_data)
+    TraderService.save_credit_score(db, trader.id, score)
+    lenders = TraderService.match_lenders(score, opay_data["monthly_avg_income"])
+
+    return {
+        "opay_data": opay_data,
+        "credit_score": score,
+        "lenders": lenders,
+        "reply": build_credit_reply(score, lenders, opay_data)
+    }
 # ============================================================
 # Trader Dashboard API Endpoints
 # ============================================================
