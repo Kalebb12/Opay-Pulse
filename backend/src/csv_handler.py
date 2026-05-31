@@ -56,7 +56,8 @@ async def download_csv(media_url: str, trader_id: int) -> str:
                 os.getenv("TWILIO_ACCOUNT_SID"),
                 os.getenv("TWILIO_AUTH_TOKEN")
             ),
-            timeout=30.0
+            timeout=30.0,
+            follow_redirects=True
         )
         response.raise_for_status()
 
