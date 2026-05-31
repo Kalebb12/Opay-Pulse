@@ -48,7 +48,7 @@ async def handle_whatsapp(request: Request, db: Session = Depends(get_db)):
     form_data = await request.form()
     incoming_phone = form_data.get("From")
     incoming_message = form_data.get("Body", "").strip()
-    media_url = form_data.get("MediaUrl")
+    media_url = form_data.get("MediaUrl0")
 
     trader = TraderService.get_or_create_trader(db, incoming_phone)
 
@@ -60,6 +60,7 @@ async def handle_whatsapp(request: Request, db: Session = Depends(get_db)):
     response = MessagingResponse()
     response.message(reply)
     return Response(content=str(response), media_type="application/xml")
+
 
 # ============================================================
 # Trader Dashboard API Endpoints
