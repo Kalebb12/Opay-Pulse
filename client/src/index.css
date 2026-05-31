@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background-color: #0a0a0a;
+  color: #ffffff;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #111; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #00C853; }
+
+/* ── Design tokens as CSS vars ── */
+:root {
+  --green: #00C853;
+  --green-bright: #00e676;
+  --surface: #0a0a0a;
+  --card: rgba(255,255,255,0.04);
+  --card-border: rgba(255,255,255,0.08);
+  --card-bright: rgba(255,255,255,0.06);
+  --card-border-bright: rgba(255,255,255,0.12);
+}
+
+/* ── Typography ── */
+.font-display { font-family: 'Space Grotesk', system-ui, sans-serif; }
+
+/* ── Glass cards ── */
+.glass {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.glass-bright {
+  background: var(--card-bright);
+  border: 1px solid var(--card-border-bright);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* ── Glows ── */
+.glow-green { box-shadow: 0 0 30px rgba(0,200,83,0.2), 0 0 60px rgba(0,200,83,0.05); }
+.text-glow-green { text-shadow: 0 0 30px rgba(0,200,83,0.5); }
+
+/* ── Hover lift ── */
+.hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+/* ── Buttons ── */
+.btn-green {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--green);
+  color: #000;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+.btn-green:hover { background: var(--green-bright); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,200,83,0.4); }
+.btn-green:active { transform: translateY(0); }
+
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: transparent;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  border: 1px solid rgba(255,255,255,0.2);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+.btn-outline:hover { border-color: var(--green); color: var(--green); background: rgba(0,200,83,0.05); transform: translateY(-1px); }
+
+/* ── Progress bar ── */
+.progress-bar { height: 6px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, #00C853, #00e676); border-radius: 999px; transition: width 1.2s ease-out; }
+
+/* ── Badges ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+}
+.badge-overdue { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; }
+.badge-pending  { background: rgba(234,179,8,0.15);  border: 1px solid rgba(234,179,8,0.3);  color: #eab308; }
+.badge-good     { background: rgba(0,200,83,0.15);   border: 1px solid rgba(0,200,83,0.3);   color: #00C853; }
+
+/* ── Animations ── */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.anim-0 { animation: fade-in-up 0.6s ease-out 0s    both; }
+.anim-1 { animation: fade-in-up 0.6s ease-out 0.1s  both; }
+.anim-2 { animation: fade-in-up 0.6s ease-out 0.2s  both; }
+.anim-3 { animation: fade-in-up 0.6s ease-out 0.35s both; }
+.anim-4 { animation: fade-in-up 0.6s ease-out 0.5s  both; }
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-10px); }
+}
+.animate-float { animation: float 4s ease-in-out infinite; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+.pulse-dot { animation: pulse-dot 1.4s ease-in-out infinite; }
+.pulse-dot-2 { animation: pulse-dot 1.4s ease-in-out 0.2s infinite; }
+.pulse-dot-3 { animation: pulse-dot 1.4s ease-in-out 0.4s infinite; }
