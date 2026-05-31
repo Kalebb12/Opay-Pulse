@@ -1,21 +1,18 @@
 import token
 
 from fastapi import FastAPI, Request, Depends, Query, HTTPException
-from fastapi.responses import Response, JSONResponse
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from twilio.rest import Client
 import os
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from twilio.twiml.messaging_response import MessagingResponse
 from src.csv_handler import handle_csv_upload
-from src.models import get_db, Trader, Transaction, DashboardToken
+from src.models import get_db, Transaction
 from src.helpers import TraderService
-from src.schemas import (
-    TraderProfileResponse, TraderTransactionsResponse, TraderStatsResponse,
-    TraderRankingResponse, TransactionData, ErrorResponse
-)
+from src.schemas import TraderTransactionsResponse
 from sqlalchemy.orm import Session 
-from sqlalchemy import desc, func
+from sqlalchemy import desc
 from src.agent import run_agent
 
 
@@ -59,25 +56,26 @@ async def handle_whatsapp(request: Request, db: Session = Depends(get_db)):
     else:
         reply = run_agent(db, trader, incoming_message)
 
-    send_whatsapp_message(incoming_phone, reply)
-    return Response("OK", status_code=200)
+    response = MessagingResponse()
+    response.message(reply)
+    return Response(content=str(response), media_type="application/xml")
 
 
-def send_whatsapp_message(to_number: str, message_body: str):
-    """
-    Send a WhatsApp message via Twilio
-    """
-    try:
-        message = client.messages.create(
-            from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
-            body=message_body,
-            to={to_number}
-        )
-        print(f"Message sent: {message.sid}")
-        return message.sid
-    except Exception as e:
-        print(f"Error sending message: {str(e)}")
-        return None
+# def send_whatsapp_message(to_number: str, message_body: str):
+#     """
+#     Send a WhatsApp message via Twilio
+#     """
+#     try:
+#         message = client.messages.create(
+#             from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
+#             body=message_body,
+#             to={to_number}
+#         )
+#         print(f"Message sent: {message.sid}")
+#         return message.sid
+#     except Exception as e:
+#         print(f"Error sending message: {str(e)}")
+#         return None
 
 
 # ============================================================
