@@ -34,9 +34,9 @@ Make sure you are sending the OPay statement export as an XLSX file."""
         score = TraderService.calculate_credit_score(db, trader.id, opay_data)
         TraderService.save_credit_score(db, trader.id, score)
         lenders = TraderService.match_lenders(score, opay_data["monthly_avg_income"])
-        match_data = TraderService.match_csv_to_logs(db, trader.id, opay_data)
+        # match_data = TraderService.match_csv_to_logs(db, trader.id, opay_data)
 
-        return build_credit_reply(score, lenders, opay_data, match_data)
+        return build_credit_reply(score, lenders, opay_data)
 
     except Exception as e:
         print(f"❌ Upload error: {str(e)}")
