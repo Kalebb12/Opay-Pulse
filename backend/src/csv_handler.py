@@ -49,16 +49,23 @@ Make sure you are sending the OPay statement export as an XLSX file."""
 async def download_csv(media_url: str, trader_id: int) -> str:
     temp_path = f"/tmp/opay_{trader_id}_{int(time.time())}.xlsx"
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(follow_redirects=True) as client:
         response = await client.get(
             media_url,
             auth=(
                 os.getenv("TWILIO_ACCOUNT_SID"),
                 os.getenv("TWILIO_AUTH_TOKEN")
             ),
-            timeout=30.0,
-            follow_redirects=True
+            timeout=30.0
         )
+
+        if response.is_redirect and response.headers.get("location"):
+            response = await client.get(
+                response.headers["location"],
+                timeout=30.0,
+                follow_redirects=True
+            )
+
         response.raise_for_status()
 
         with open(temp_path, "wb") as f:

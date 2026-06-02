@@ -1,5 +1,5 @@
 /**
- * api.ts — typed client for the OPay Pulse backend
+ * api.ts — typed client for the Credit Ledger backend
  *
  * Set VITE_API_BASE in your .env files:
  *   .env              → http://localhost:8000   (local dev)
@@ -132,11 +132,11 @@ export const api = {
 // ─── Credit band helpers ──────────────────────────────────────────────────────
 
 export function creditBand(score: number): { band: string; next: string; threshold: number } {
-  if (score < 500) return { band: 'Poor',      next: 'Fair',      threshold: 500 }
-  if (score < 620) return { band: 'Fair',      next: 'Good',      threshold: 620 }
-  if (score < 740) return { band: 'Good',      next: 'Very Good', threshold: 740 }
+  if (score < 500) return { band: 'Poor', next: 'Fair', threshold: 500 }
+  if (score < 620) return { band: 'Fair', next: 'Good', threshold: 620 }
+  if (score < 740) return { band: 'Good', next: 'Very Good', threshold: 740 }
   if (score < 800) return { band: 'Very Good', next: 'Excellent', threshold: 800 }
-  return                   { band: 'Excellent', next: 'Excellent', threshold: 850 }
+  return { band: 'Excellent', next: 'Excellent', threshold: 850 }
 }
 
 export function bandColor(band: string): string {

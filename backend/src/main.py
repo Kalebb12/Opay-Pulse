@@ -49,13 +49,25 @@ async def handle_whatsapp(request: Request, db: Session = Depends(get_db)):
     incoming_phone = form_data.get("From")
     incoming_message = form_data.get("Body", "").strip()
     media_url = form_data.get("MediaUrl0")
+    media_type = form_data.get("MediaContentType0", "")
+    from src.voice_handler import transcribe_voice_note
 
     trader = TraderService.get_or_create_trader(db, incoming_phone)
 
     if media_url:
-        reply = await handle_csv_upload(db, trader, media_url)
+        if "audio" in media_type:
+            # Voice note → transcribe → agent
+            transcribed = await transcribe_voice_note(media_url)
+            if transcribed:
+                reply = run_agent(db, trader, transcribed)
+            else:
+                reply = "I couldn't understand that voice note. Please try again or type your message."
+        else:
+            # Document → CSV upload handler
+            reply = await handle_csv_upload(db, trader, media_url)
     else:
         reply = run_agent(db, trader, incoming_message)
+
 
     response = MessagingResponse()
     response.message(reply)
