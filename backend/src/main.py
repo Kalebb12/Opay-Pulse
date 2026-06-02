@@ -53,8 +53,7 @@ async def handle_whatsapp(request: Request, db: Session = Depends(get_db)):
     from src.voice_handler import transcribe_voice_note
 
     trader = TraderService.get_or_create_trader(db, incoming_phone)
-    
-    reply = ""
+
     if media_url:
         if "audio" in media_type:
             # Voice note → transcribe → agent
