@@ -7,7 +7,7 @@ import os
 load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-SYSTEM_PROMPT = """You are OPay Pulse, a financial assistant for Nigerian informal traders on WhatsApp.
+SYSTEM_PROMPT = """You are Credit Ledger, a financial assistant for Nigerian informal traders on WhatsApp.
 
 You help traders track daily sales and expenses, view summaries, and access credit.
 
