@@ -54,23 +54,44 @@ async def handle_whatsapp(request: Request, db: Session = Depends(get_db)):
 
     trader = TraderService.get_or_create_trader(db, incoming_phone)
 
-    if media_url:
-        if "audio" in media_type:
-            # Voice note → transcribe → agent
-            transcribed = await transcribe_voice_note(media_url)
-            if transcribed:
-                reply = run_agent(db, trader, transcribed)
+    reply = None
+    try:
+        if media_url:
+            if "audio" in media_type:
+                # Voice note → transcribe → agent
+                print(f"🎤 Processing voice note from {incoming_phone}")
+                try:
+                    transcribed = await transcribe_voice_note(media_url)
+                    print(f"✅ Transcription complete: {transcribed[:100] if transcribed else 'EMPTY'}")
+                    if transcribed:
+                        reply = run_agent(db, trader, transcribed)
+                        print(f"✅ Agent reply generated: {reply[:100]}...")
+                    else:
+                        reply = "I couldn't understand that voice note. Please try again or type your message."
+                except Exception as e:
+                    import traceback
+                    print(f"❌ Voice transcription error: {str(e)}")
+                    print(traceback.format_exc())
+                    reply = "Had trouble processing your voice note. Please try again."
             else:
-                reply = "I couldn't understand that voice note. Please try again or type your message."
+                # Document → CSV upload handler
+                reply = await handle_csv_upload(db, trader, media_url)
         else:
-            # Document → CSV upload handler
-            reply = await handle_csv_upload(db, trader, media_url)
-    else:
-        reply = run_agent(db, trader, incoming_message)
+            reply = run_agent(db, trader, incoming_message)
+    except Exception as e:
+        import traceback
+        print(f"❌ WhatsApp handler error: {str(e)}")
+        print(traceback.format_exc())
+        reply = "Something went wrong. Please try again."
 
+    # Fallback reply if somehow reply is still None
+    if reply is None:
+        print(f"❌ CRITICAL: reply is None for {incoming_phone}")
+        reply = "I'm having trouble right now. Please try again."
 
     response = MessagingResponse()
     response.message(reply)
+    print(f"📱 WhatsApp {incoming_phone}: {incoming_message[:50] if incoming_message else '(voice)'}... | 200 OK | Reply: {reply[:50]}...")
     return Response(content=str(response), media_type="application/xml")
 
 

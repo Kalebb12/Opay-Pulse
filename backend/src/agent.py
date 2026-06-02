@@ -153,7 +153,8 @@ def run_agent(db, trader, user_message: str) -> str:
 
     # No tool call — agent replied directly
     if not response.function_calls:
-        return response.text
+        text = response.text or "I'm not sure how to respond. Please try again."
+        return text if text.strip() else "I'm not sure how to respond. Please try again."
 
     fn = response.function_calls[0]
     fn_name = fn.name
