@@ -15,7 +15,7 @@ import {
   Zap,
 } from "lucide-react";
 
-const WA_LINK = "https://wa.me/+14155238886?text=brief-slight";
+const WA_LINK = "https://wa.me/+14155238886?text=join brief-slight";
 
 const c = {
   green: "#00C853",
@@ -581,7 +581,7 @@ export default function LandingPage() {
                 marginTop: 6,
               }}
             >
-              wa.me/+14155238886 · message: brief-slight
+              wa.me/+14155238886 · message: join brief-slight
             </p>
           </div>
 
